@@ -26,7 +26,7 @@ sso_configured(){
         echo -e "${YELLOW}aws configure sso --profile $profile${NC}"
         echo 
         echo "Some of the values to use are..."
-        echo sso start url: https://superhifi.awsapps.com/start
+        echo sso start url: https://[company].awsapps.com/start "# replace [company] with your company name"
         echo sso region: $region
         aws configure sso --profile $profile
         exit 1;
