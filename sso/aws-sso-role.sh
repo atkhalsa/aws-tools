@@ -80,7 +80,7 @@ now=$(TZ=UTC date +%s)
 # check if token is expired then login again
 if [ $sso_token_expiry_epoch -lt $now ]; then
   get_creds=true
-  echo "Token expired @ ${RED}${sso_token_expiry}${NC}, logging in again"
+  echo -e "Token expired @ ${RED}$sso_token_expiry${NC}, logging in again"
   aws sso login --sso-session ${sso_session_name}
   read_credentials
 fi
