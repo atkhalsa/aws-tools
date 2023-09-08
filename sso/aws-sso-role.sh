@@ -6,6 +6,7 @@
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 
 profile=${1:-shf-dev}
 region=${2:-us-west-2}
@@ -51,7 +52,7 @@ read_credentials() {
   role_arn_name=$(echo $current_identity | jq -r '.Arn' | cut -d "/" -f2 )
   account_number=$(echo $current_identity | jq -r '.Arn' | cut -d ":" -f5 )
   
-  echo "Welcome ${GREEN}$username${NC}, you are logged in with role ${GREEN}$role_arn_name${NC}"
+  echo -e "Welcome ${GREEN}$username${NC}, you are logged in with role ${GREEN}$role_arn_name${NC}"
 
    # find the latest CLI JSON file
    json_file=$(ls -tr "${JSON_BASEPATH}" | tail -n1)
@@ -79,7 +80,7 @@ now=$(TZ=UTC date +%s)
 # check if token is expired then login again
 if [ $sso_token_expiry_epoch -lt $now ]; then
   get_creds=true
-  echo "Token expired @ ${sso_token_expiry}, logging in again"
+  echo "Token expired @ ${RED}${sso_token_expiry}${NC}, logging in again"
   aws sso login --sso-session ${sso_session_name}
   read_credentials
 fi
@@ -95,7 +96,7 @@ role_token_expiry=$(echo $credentials | jq -r '.Credentials.Expiration')
 role_token_expiry_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$role_token_expiry" +%s)
 
 if [ $role_token_expiry_epoch -lt $now ] || [ $get_creds = true ]; then
-  echo "Role token expired @ ${role_token_expiry} or new SSO token, getting new role credentials"
+ echo -e "Role token expired @ ${RED}$role_token_expiry${NC} or got ${YELLOW}new SSO${NC} token, getting new role credentials"
   role_creds=$(aws sso get-role-credentials --role-name $sso_role_name --account-id $sso_account_id --access-token $sso_access_token)
    # find the latest CLI JSON file
     json_file=$(ls -tr "${JSON_BASEPATH_CLI}" | tail -n1)
