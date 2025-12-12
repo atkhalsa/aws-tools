@@ -6,6 +6,7 @@
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 
 profile=${1:-shf-dev}
 region=${2:-us-west-2}
@@ -51,18 +52,77 @@ read_credentials() {
    json_file=$(ls -tr "${JSON_BASEPATH}" | tail -n1)
    credentials=$(cat ${JSON_BASEPATH}/${json_file})
 }
-sso_configured
-read_credentials
 
-if [ $? -ne 0 ]; then
-  echo you need to login
-  aws sso login --profile "$profile"
-
-  if [ $? -ne 0 ]; then
-    exit 1
+sso-check() {
+  local PROFILE=$profile
+  
+  # 1. Try to get the sso-session name (Modern Config)
+  local SESSION=$(aws configure get sso_session --profile "$PROFILE")
+  
+  local CACHE_FILE=""
+  
+  if [[ -n "$SESSION" ]]; then
+    # Calculate SHA1 of the session name
+    # Uses openssl to be cross-platform (works on both Mac and Linux)
+    local CHECKSUM=$(echo -n "$SESSION" | openssl sha1 | awk '{print $NF}')
+    CACHE_FILE="$HOME/.aws/sso/cache/${CHECKSUM}.json"
+  else
+    # Fallback: Try to find by Start URL (Legacy Config)
+    local URL=$(aws configure get sso_start_url --profile "$PROFILE")
+    if [[ -z "$URL" ]]; then
+        echo "Error: Profile '$PROFILE' has no sso_session or sso_start_url configured."
+        return 1
+    fi
+    # Grep for the URL since legacy filenames are harder to predict script-wise
+    CACHE_FILE=$(grep -l "$URL" ~/.aws/sso/cache/*.json 2>/dev/null | head -n 1)
   fi
 
-  read_credentials
+  if [[ ! -f "$CACHE_FILE" ]]; then
+    echo "No active login found (Cache file missing)."
+    return 1
+  fi
+
+  # 3. Check Expiration using jq
+  # -e makes jq exit with status 0 if true (valid), 1 if false (expired)
+  cat "$CACHE_FILE" | jq -e '.expiresAt | fromdate > now' > /dev/null
+  
+  # Capture the result
+  local STATUS=$?
+  
+  expiresAtUTC=$(cat "$CACHE_FILE" | jq -r '.expiresAt')
+  # Convert UTC to local timezone for display
+  # The format of expiresAt is like '2024-01-01T12:00:00Z'
+  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$expiresAtUTC" +"%Y-%m-%d %H:%M:%S %Z")
+
+  if [ $STATUS -eq 0 ]; then
+    echo -e "Valid till: ${GREEN}$expiresAtLocal${NC}"
+    return 0
+  else
+    echo -e "Expired. Expired at: ${RED}$expiresAtLocal${NC}, now: $(date +"%Y-%m-%d %H:%M:%S %Z")\n"
+    return 1
+  fi
+
+}
+
+sso_configured
+
+# First, check if the token is valid and not expired.
+sso-check
+# If the check fails, initiate the login process.
+if [ $? -ne 0 ]; then
+  echo "you need to login"
+  aws sso login --profile "$profile"
+  if [ $? -ne 0 ]; then
+    echo "AWS SSO login failed."
+    exit 1
+  fi
+fi
+
+# After ensuring the session is active, read the credentials.
+read_credentials
+if [ $? -ne 0 ]; then
+  echo "Failed to read credentials even after a successful login."
+  exit 1
 fi
 
 access_key_id=$(echo $credentials | jq -r '.Credentials.AccessKeyId')
