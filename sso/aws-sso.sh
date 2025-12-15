@@ -91,7 +91,8 @@ sso-check() {
   
   expiresAtUTC=$(cat "$CACHE_FILE" | jq -r '.expiresAt')
   # Convert UTC to local timezone for display
-  # The format of expiresAt is like '2024-01-01T12:00:00Z'
+  # Try to parse with milliseconds first, then fall back to without.
+  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%S.%fZ" "$expiresAtUTC" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null) || \
   expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$expiresAtUTC" +"%Y-%m-%d %H:%M:%S %Z")
 
   if [ $STATUS -eq 0 ]; then
