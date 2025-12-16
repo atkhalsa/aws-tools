@@ -90,10 +90,10 @@ sso-check() {
   local STATUS=$?
   
   expiresAtUTC=$(cat "$CACHE_FILE" | jq -r '.expiresAt')
-  # Convert UTC to local timezone for display
-  # Try to parse with milliseconds first, then fall back to without.
-  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%S.%fZ" "$expiresAtUTC" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null) || \
-  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$expiresAtUTC" +"%Y-%m-%d %H:%M:%S %Z")
+    # macOS `date` doesn't support milliseconds, so we strip them before parsing.
+  # This handles both "2025-12-16T17:19:36.828Z" and "2025-12-16T17:19:36Z" formats.
+  expiresAtCleaned=$(echo "$expiresAtUTC" | sed 's/\.[0-9]*Z$/Z/')
+  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$expiresAtCleaned" +"%Y-%m-%d %H:%M:%S %Z")
 
   if [ $STATUS -eq 0 ]; then
     echo -e "Valid till: ${GREEN}$expiresAtLocal${NC}"
