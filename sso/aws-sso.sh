@@ -89,17 +89,16 @@ sso-check() {
   # Capture the result
   local STATUS=$?
   
-  expiresAtUTC=$(cat "$CACHE_FILE" | jq -r '.expiresAt')
-    # macOS `date` doesn't support milliseconds, so we strip them before parsing.
-  # This handles both "2025-12-16T17:19:36.828Z" and "2025-12-16T17:19:36Z" formats.
-  expiresAtCleaned=$(echo "$expiresAtUTC" | sed 's/\.[0-9]*Z$/Z/')
-  expiresAtLocal=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$expiresAtCleaned" +"%Y-%m-%d %H:%M:%S %Z")
+  # Use jq to convert ISO 8601 timestamp directly to epoch time
+  expiresAtEpoch=$(cat "$CACHE_FILE" | jq -r '.expiresAt | fromdate')
+  # Convert epoch time to local timezone for display
+  expiresAtLocal=$(date -r "$expiresAtEpoch" +"%Y-%m-%d %H:%M:%S %Z")
 
   if [ $STATUS -eq 0 ]; then
-    echo -e "Valid till: ${GREEN}$expiresAtLocal${NC}"
+    echo -e "✅ Valid till: ${GREEN}$expiresAtLocal${NC}"
     return 0
   else
-    echo -e "Expired. Expired at: ${RED}$expiresAtLocal${NC}, now: $(date +"%Y-%m-%d %H:%M:%S %Z")\n"
+    echo -e "❌ Expired at: ${RED}$expiresAtLocal${NC}, now: $(date +"%Y-%m-%d %H:%M:%S %Z")\n"
     return 1
   fi
 
